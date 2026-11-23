@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>아침 자습 출석부</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@112,500;112,800&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* VOICE: 이른 아침 교실 — 조용하고 기능 우선, 장식 없음
+   IDEA: 역 출발 안내판처럼 읽히는 출석 시간표
+   PICTURE: 학생 이름 타일 그리드 자체 + 크게 걸린 시계
+   COLOUR and TYPE: #0e0e0e 바탕, 회색 한 톤, 신호 빨강 하나 / 숫자 Archivo, 글자 Noto Sans KR
+   LAYOUT: 넓은 화면은 왼쪽 고정 패널(시계·수행평가), 좁으면 위쪽 고정 */
+:root{color-scheme:dark;--bg:#0e0e0e;--s1:#151515;--s2:#1d1d1d;--line:#2a2a2a;--ink:#ededea;--mut:#8f8f8a;--red:#e4002b;--redt:#ff4d6a;--reds:rgba(228,0,43,.13);--num:'Archivo',system-ui,sans-serif}
+*{box-sizing:border-box;min-width:0}
+html,body{background:var(--bg)}
+body{margin:0;color:var(--ink);font:16px/1.55 'Noto Sans KR',system-ui,-apple-system,sans-serif;overflow-x:clip;-webkit-tap-highlight-color:transparent}
+button,input,select,textarea{font:inherit;color:inherit}
+[hidden]{display:none!important}
+:focus-visible{outline:2px solid var(--redt);outline-offset:2px}
+.app{display:grid;grid-template-columns:minmax(0,1fr);min-height:100vh}
+aside{background:var(--s1);border-bottom:1px solid var(--line);padding:14px max(4vw,16px) 12px;position:sticky;top:0;z-index:5}
+.top{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+.brand{font-weight:700;font-size:15px}
+.brand i{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--red);margin-right:8px;vertical-align:middle}
+.clk{font:800 38px/1 var(--num);font-stretch:112%;font-variant-numeric:tabular-nums;letter-spacing:-.02em;white-space:nowrap}
+.clk small{font-size:.42em;color:var(--mut);margin-left:4px;font-weight:500}
+#dt{color:var(--mut);font-size:14px}
+.conn{font-size:13px;color:var(--mut);margin-top:4px}
+.conn.bad{color:var(--redt)}
+.notice{margin-top:12px;border-top:3px solid var(--red);padding-top:10px}
+.nhead{display:flex;justify-content:space-between;align-items:baseline;gap:8px;width:100%;background:none;border:0;padding:0;cursor:pointer;text-align:left;min-height:32px}
+.nhead b{font-size:16px}
+.nhead small{color:var(--mut);font-size:13px;white-space:nowrap}
+.nhead small.stale{color:var(--redt)}
+.notice ul{list-style:none;margin:6px 0 0;padding:0;max-height:24vh;overflow:auto}
+.notice li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 12px;padding:9px 0;border-top:1px solid var(--line)}
+.notice li:first-child{border-top:0}
+.notice li b{white-space:nowrap}
+.notice li span{color:#d2d2ce}
+.notice li.none{display:block;color:var(--mut)}
+.notice.fold ul{display:none}
+.fold-hint{color:var(--mut);font-size:12px}
+@media(min-width:980px){
+ .app{grid-template-columns:360px minmax(0,1fr)}
+ aside{height:100vh;border-bottom:0;border-right:1px solid var(--line);padding:28px;overflow:auto}
+ .top{display:block}.clk{font-size:64px;margin-top:26px}
+ .notice{margin-top:30px}.notice ul,.notice.fold ul{display:block;max-height:none}
+ .notice li{grid-template-columns:minmax(0,1fr)}
+ .nhead{cursor:default}.fold-hint{display:none}
+}
+main{padding:clamp(18px,3vw,40px) max(4vw,16px) 80px;max-width:1100px;width:100%}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:22px;overflow-x:auto}
+.tabs button{background:none;border:0;border-bottom:2px solid transparent;padding:10px 14px;min-height:44px;color:var(--mut);font-weight:500;cursor:pointer;white-space:nowrap}
+.tabs button.on{color:var(--ink);border-bottom-color:var(--red)}
+.vhead{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px 20px;margin-bottom:16px}
+h1{font-size:clamp(26px,4vw,34px);line-height:1.1;margin:0;letter-spacing:-.02em}
+h3{font-size:16px;margin:28px 0 10px}
+.stats{display:flex;flex-wrap:wrap;gap:6px 18px;color:var(--mut);font-size:14px}
+.stats b{font:800 22px/1 var(--num);font-stretch:112%;color:var(--ink);margin-right:5px}
+.stats .live b{color:var(--redt)}
+.search,.in{width:100%;background:var(--s1);border:1px solid var(--line);border-radius:10px;padding:10px 14px;min-height:46px;font-size:16px;outline:none}
+.search:focus,.in:focus{border-color:#555}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:10px;margin-top:14px}
+.grid .empty{grid-column:1/-1}
+.tile{position:relative;text-align:left;background:var(--s1);border:1px solid var(--line);border-radius:12px;padding:12px 14px;min-height:94px;cursor:pointer;display:flex;flex-direction:column;gap:2px;transition:border-color .15s,background .15s}
+.tile:hover{border-color:#444}
+.tile small{font:500 13px/1.2 var(--num);color:var(--mut);font-variant-numeric:tabular-nums;min-height:16px}
+.tile b{font-size:18px;line-height:1.3;overflow-wrap:anywhere}
+.tile .st{margin-top:auto;font-size:13px;color:var(--mut)}
+.tile.on{border-color:var(--red);background:var(--reds)}
+.tile.on .st{font:800 17px/1 var(--num);font-stretch:112%;color:var(--redt);font-variant-numeric:tabular-nums}
+.tile.on::after{content:'';position:absolute;top:14px;right:14px;width:8px;height:8px;border-radius:50%;background:var(--red);animation:pulse 1.6s ease-in-out infinite}
+.tile.done b{color:#bdbdb8}
+@keyframes pulse{50%{opacity:.2}}
+@media(prefers-reduced-motion:reduce){.tile.on::after{animation:none}}
+.btn{background:var(--s2);border:1px solid var(--line);border-radius:10px;padding:9px 16px;min-height:44px;cursor:pointer;font-weight:500;white-space:nowrap}
+.btn:hover{border-color:#4a4a4a}
+.btn.red{background:var(--red);border-color:var(--red);color:#fff}
+.btn.ghost{background:none}
+.btn.sm{min-height:38px;padding:6px 12px;font-size:14px}
+.btn:disabled{opacity:.4;cursor:default}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:12px}
+.row .search{flex:1 1 220px;width:auto}
+.empty{color:var(--mut);padding:24px 0}
+.foot,.hint{color:var(--mut);font-size:14px;margin-top:16px}
+.list{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+.list li{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:11px 0;border-bottom:1px solid var(--line)}
+.list li>div{flex:1 1 140px}
+.list li b{display:block}
+.list li small{color:var(--mut);font-size:13px}
+.list em{color:var(--redt);font-style:normal}
+.list .no{color:var(--mut);width:4.5em}
+.tm{font:800 18px/1 var(--num);font-stretch:112%;color:var(--redt);font-variant-numeric:tabular-nums;white-space:nowrap}
+.num{font-family:var(--num);font-variant-numeric:tabular-nums;white-space:nowrap}
+.nowhead{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px}
+.big b{font:800 56px/1 var(--num);font-stretch:112%;color:var(--redt)}
+.big span{color:var(--mut);margin-left:6px}
+.warn{background:var(--reds);border:1px solid rgba(228,0,43,.45);border-radius:10px;padding:10px 14px;margin-bottom:18px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.chips{display:flex;gap:6px;overflow-x:auto;margin-bottom:20px;padding-bottom:4px}
+.chips button{background:var(--s1);border:1px solid var(--line);border-radius:999px;padding:8px 14px;min-height:40px;cursor:pointer;white-space:nowrap;color:var(--mut)}
+.chips button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.lock{max-width:320px;margin:12px auto;text-align:center}
+.lock p{color:var(--mut);font-size:14px}
+.pin{width:100%;text-align:center;font:800 28px/1 var(--num);letter-spacing:.4em;background:var(--s1);border:1px solid var(--line);border-radius:12px;padding:14px;margin:12px 0;outline:none}
+.pad{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.pad button{min-height:58px;font:500 22px/1 var(--num);background:var(--s1);border:1px solid var(--line);border-radius:12px;cursor:pointer}
+.pad button.ok{background:var(--red);border-color:var(--red);color:#fff;font:500 17px/1 'Noto Sans KR',sans-serif}
+.mstep{display:flex;align-items:center;gap:6px}
+.mstep b{font-size:17px;min-width:8em;text-align:center;white-space:nowrap}
+.mstep button{width:44px;height:44px;border-radius:10px;background:var(--s1);border:1px solid var(--line);font-size:22px;cursor:pointer}
+.mstep button:disabled{opacity:.3;cursor:default}
+.sum{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.sum div{background:var(--s1);padding:14px 16px}
+.sum small{display:block;color:var(--mut);font-size:13px}
+.sum b{font:800 clamp(20px,3vw,28px)/1.2 var(--num);font-stretch:112%;white-space:nowrap}
+table{width:100%;border-collapse:collapse;margin-top:12px}
+th{font-size:13px;color:var(--mut);font-weight:500;text-align:left;padding:8px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:11px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+th.r,td.r{text-align:right}
+tr.rw{cursor:pointer}
+tr.rw:hover td{background:var(--s1)}
+.rk{font:800 15px var(--num);color:var(--mut);width:3em}
+tr.top3 .rk{color:var(--redt)}
+.bar{height:4px;background:var(--s2);border-radius:2px;margin-top:6px;min-width:60px}
+.bar i{display:block;height:100%;background:var(--red);border-radius:2px}
+.gone{color:var(--mut);font-size:12px;margin-left:6px}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;padding:6px 0 4px;max-width:420px}
+.cal span{font-size:12px;color:var(--mut);text-align:center}
+.cal div{aspect-ratio:1;border-radius:8px;background:var(--s2);padding:5px;font:500 12px/1 var(--num);color:var(--mut);display:flex;flex-direction:column;justify-content:space-between}
+.cal div.x{background:none}
+.cal div em{font-style:normal;font-weight:800;font-size:11px}
+.cal div.t{outline:1px solid #777}
+.ndrow{display:grid;grid-template-columns:8.5em minmax(0,1fr) 46px;gap:8px;margin-bottom:8px}
+.x{background:none;border:1px solid var(--line);border-radius:10px;color:var(--mut);font-size:20px;cursor:pointer;min-height:46px}
+.addst{display:grid;grid-template-columns:9em minmax(0,1fr) auto;gap:8px}
+details.bulk{margin-top:14px;border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+details.bulk summary{cursor:pointer;color:var(--mut);min-height:28px}
+textarea.in{min-height:140px;margin:10px 0;resize:vertical;display:block}
+.card{background:var(--s1);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:12px}
+.card h3{margin:0 0 8px}
+.card p{margin:0;color:var(--mut);font-size:14px}
+.card .row .in{flex:1 1 160px;width:auto}
+.tog{display:flex;gap:10px;align-items:center;min-height:44px;cursor:pointer}
+.tog input{width:20px;height:20px;accent-color:var(--red)}
+.fld{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mut)}
+input[type=date],input[type=time],select{background:var(--s1);border:1px solid var(--line);border-radius:10px;padding:8px 12px;min-height:44px;font-size:16px;color-scheme:dark}
+.sheet{position:fixed;inset:0;background:rgba(0,0,0,.72);display:grid;place-items:center;padding:16px;z-index:20}
+.sbox{width:min(420px,100%);padding:24px;margin:0}
+.sbox small{font:500 14px var(--num);color:var(--mut)}
+.sbox h2{font-size:34px;margin:2px 0 8px;line-height:1.15}
+.sbox .row .btn{flex:1}
+.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,16px);background:var(--ink);color:var(--bg);padding:12px 18px;border-radius:10px;font-weight:500;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;max-width:calc(100% - 32px);z-index:30}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+.toast.bad{background:var(--red);color:#fff}
+@media(max-width:600px){
+ .sum{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .hs{display:none}td,th{padding-inline:5px}
+ .ndrow{grid-template-columns:minmax(0,1fr) 46px}.ndrow input:nth-child(2){grid-column:1/-1;grid-row:2}.ndrow .x{grid-column:2;grid-row:1}
+ .addst{grid-template-columns:minmax(0,1fr) minmax(0,1.4fr)}.addst .btn{grid-column:1/-1}
+ .big b{font-size:44px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+ <aside>
+  <div class="top">
+   <div><div class="brand"><i></i>아침 자습 출석부</div><div id="dt"></div></div>
+   <div class="clk" id="clk">--:--</div>
+  </div>
+  <div class="conn" id="conn">불러오는 중…</div>
+  <section class="notice" id="notice" aria-live="polite">
+   <button class="nhead" id="nToggle" aria-expanded="true"><b id="ntitle">오늘의 수행평가</b><small id="nmeta"></small></button>
+   <ul id="nlist"><li class="none">불러오는 중…</li></ul>
+  </section>
+ </aside>
+
+ <main>
+  <nav class="tabs" aria-label="화면">
+   <button data-v="att" class="on">출석</button>
+   <button data-v="mon">월간 기록</button>
+   <button data-v="adm">관리자</button>
+  </nav>
+
+  <section class="view" id="v-att">
+   <div class="vhead"><h1>오늘 출석</h1><div class="stats" id="attStats"></div></div>
+   <input id="q" class="search" type="search" placeholder="이름이나 학번으로 찾기" autocomplete="off">
+   <div id="grid" class="grid"></div>
+   <p class="foot">자기 이름을 눌러 출석하세요. 출석한 순간부터 시간이 재지고, 종료는 선생님이 눌러요.</p>
+  </section>
+
+  <section class="view" id="v-mon" hidden>
+   <div class="vhead"><h1>월간 기록</h1>
+    <div class="mstep"><button id="mPrev" aria-label="이전 달">‹</button><b id="mLabel"></b><button id="mNext" aria-label="다음 달">›</button></div>
+   </div>
+   <div id="monSum" class="sum"></div>
+   <div class="row"><input id="mq" class="search" type="search" placeholder="학생 찾기" autocomplete="off"><button id="csv" class="btn ghost" hidden>표 복사 (엑셀 붙여넣기용)</button></div>
+   <textarea id="csvOut" class="in" hidden readonly aria-label="복사할 표"></textarea>
+   <div id="monBody"></div>
+   <p class="foot">학생 줄을 누르면 그 달의 날짜별 공부 시간이 보여요.</p>
+  </section>
+
+  <section class="view" id="v-adm" hidden>
+   <div id="admLock" class="lock">
+    <h1>관리자</h1>
+    <p>관리자 PIN을 입력하세요.</p>
+    <form id="pinForm"><input id="pin" class="pin" type="password" inputmode="numeric" maxlength="8" autocomplete="off" aria-label="PIN"></form>
+    <div class="pad">
+     <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+     <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+     <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+     <button data-k="del" aria-label="지우기">←</button><button data-k="0">0</button><button data-k="ok" class="ok">확인</button>
+    </div>
+    <p id="pinHint" hidden>처음 PIN은 0000이에요. 들어가서 설정에서 꼭 바꿔 주세요.</p>
+   </div>
+   <div id="admIn" hidden>
+    <div class="vhead"><h1>관리자</h1><button id="lockBtn" class="btn ghost">잠그기</button></div>
+    <div class="chips" id="admChips">
+     <button data-t="now" class="on">현황</button><button data-t="notice">수행평가</button><button data-t="roster">학생 명단</button><button data-t="rec">기록 수정</button><button data-t="set">설정</button>
+    </div>
+    <div id="admBody"></div>
+   </div>
+  </section>
+ </main>
+</div>
+
+<div id="sheet" class="sheet" hidden>
+ <div class="card sbox" role="dialog" aria-modal="true" aria-labelledby="shName">
+  <small id="shNo"></small>
+  <h2 id="shName"></h2>
+  <p>지금 출석할까요? 누르는 순간부터 공부 시간이 기록돼요.</p>
+  <div class="row"><button class="btn ghost" id="shCancel">취소</button><button class="btn red" id="shOk">출석하기</button></div>
+ </div>
+</div>
+<div id="toast" class="toast" role="status"></div>
+
+<script>
+/* ===== 여러 기기 공유 설정 =====
+   Firebase 웹앱 설정값을 아래에 넣으면 모든 기기가 같은 명단과 기록을 봐요.
+   null이면 이 기기의 브라우저에만 저장돼요. */
+const FIREBASE_CONFIG = null;
+</script>
+<script>
+{
+const ADMIN=/[?&]admin\b/.test(location.search)||location.hash==='#admin';
+const $=s=>document.querySelector(s);
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pad=n=>String(n).padStart(2,'0');
+const dkey=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const today=()=>dkey(new Date());
+const ymOf=k=>k.slice(0,7);
+const md=k=>(+k.slice(5,7))+'월 '+(+k.slice(8,10))+'일';
+const hm=ms=>{const d=new Date(ms);return pad(d.getHours())+':'+pad(d.getMinutes())};
+const hms=ms=>{const s=Math.floor(Math.max(0,ms)/1000);return pad(Math.floor(s/3600))+':'+pad(Math.floor(s/60)%60)+':'+pad(s%60)};
+const kdur=ms=>{const m=Math.round(ms/60000);if(m<60)return m+'분';const h=Math.floor(m/60),r=m%60;return h+'시간'+(r?' '+r+'분':'')};
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+const DOW='일월화수목금토';
+const hash=p=>{let h=2166136261;for(const c of 'mstudy:'+p){h^=c.charCodeAt(0);h=Math.imul(h,16777619)}return (h>>>0).toString(16)};
+const dur=(s,now)=>Math.max(0,(s.end??now)-s.start);
+const cmpNo=(a,b)=>String(a.no||'').localeCompare(String(b.no||''),undefined,{numeric:true})||String(a.name||'').localeCompare(String(b.name||''),'ko');
+const toMs=(date,v)=>{if(!v)return null;const t=new Date(date+'T'+v+':00').getTime();return isNaN(t)?null:t};
+const addM=(ym,k)=>{let [y,m]=ym.split('-').map(Number);m+=k;while(m<1){m+=12;y--}while(m>12){m-=12;y++}return y+'-'+pad(m)};
+const STALE_CAP=3*3600e3, IDLE=5*60e3;
+
+/* ---------- 저장소: 공유 db, 없으면 이 기기 localStorage ---------- */
+function localStore(){
+ const K='morning-study-v1';let st=null;
+ try{st=JSON.parse(localStorage.getItem(K)||'null')}catch(e){}
+ if(!st||typeof st!=='object')st={students:{},months:{},meta:{}};
+ const subs=new Set(),emit=()=>subs.forEach(f=>f());
+ const save=()=>{try{localStorage.setItem(K,JSON.stringify(st))}catch(e){}emit()};
+ const list=o=>Object.entries(o||{}).map(([id,d])=>({id,...d}));
+ const sub=f=>{subs.add(f);f();return()=>subs.delete(f)};
+ window.addEventListener('storage',e=>{if(e.key===K){try{st=JSON.parse(e.newValue)||st}catch(x){}emit()}});
+ return{kind:'local',
+  students:cb=>sub(()=>cb(list(st.students),true)),
+  sessions:(ym,cb)=>sub(()=>cb(list(st.months[ym]),true)),
+  meta:(k,cb)=>sub(()=>cb(st.meta[k]||null,true)),
+  setStudent:async(id,d)=>{st.students[id]=d;save()},
+  delStudent:async id=>{delete st.students[id];save()},
+  setSession:async(ym,id,d)=>{(st.months[ym]=st.months[ym]||{})[id]=d;save()},
+  delSession:async(ym,id)=>{if(st.months[ym])delete st.months[ym][id];save()},
+  setMeta:async(k,d)=>{st.meta[k]=d;save()},
+  dump:()=>JSON.stringify(st),
+  load:o=>{if(!o||typeof o!=='object'||!o.students||!o.months||!o.meta)throw 0;st=o;save()}};
+}
+async function fsStore(cfg){
+ const B='https://www.gstatic.com/firebasejs/10.12.2/';
+ const [fa,f]=await Promise.all([import(B+'firebase-app.js'),import(B+'firebase-firestore.js')]);
+ const db=f.getFirestore(fa.initializeApp(cfg));
+ const list=s=>s.docs.map(d=>({id:d.id,...d.data()}));
+ const on=(ref,map,cb,er)=>f.onSnapshot(ref,s=>cb(map(s),!s.metadata.fromCache),e=>{console.error(e);er&&er(e)});
+ return{kind:'db',
+  students:(cb,er)=>on(f.collection(db,'students'),list,cb,er),
+  sessions:(ym,cb,er)=>on(f.collection(db,'months',ym,'sessions'),list,cb,er),
+  meta:(k,cb,er)=>on(f.doc(db,'meta',k),s=>s.exists()?s.data():null,cb,er),
+  setStudent:(id,d)=>f.setDoc(f.doc(db,'students',id),d),
+  delStudent:id=>f.deleteDoc(f.doc(db,'students',id)),
+  setSession:(ym,id,d)=>f.setDoc(f.doc(db,'months',ym,'sessions',id),d),
+  delSession:(ym,id)=>f.deleteDoc(f.doc(db,'months',ym,'sessions',id)),
+  setMeta:(k,d)=>f.setDoc(f.doc(db,'meta',k),d)};
+}
+
+/* ---------- 상태 ---------- */
+const A={students:[],cur:[],curYM:ymOf(today()),notice:null,config:{},cfgLoaded:false,mon:{ym:'',list:[]},monYM:ymOf(today()),
+ view:'att',admin:false,admTab:'now',q:'',monQ:'',open:null,recDate:today(),nd:[],ed:null,arm:null,endArm:false,owner:false,ready:false,lastAct:Date.now(),busy:false};
+let S=null,unCur=null,unMon=null,conn='wait',ldT=null,sheetSt=null,tT=null;
+
+function toast(m,bad){const t=$('#toast');t.textContent=m;t.className='toast show'+(bad?' bad':'');clearTimeout(tT);tT=setTimeout(()=>{t.className='toast'},2800)}
+async function w(fn,okMsg){
+ try{await fn();if(okMsg)toast(okMsg);return true}
+ catch(e){const c=e&&e.code;
+  console.error(e);toast(c==='permission-denied'?'저장 권한이 없어요. 저장소 보안 규칙을 확인해 주세요':c==='resource-exhausted'?'저장 공간이나 사용량이 가득 찼어요':'저장하지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요',true);return false}
+}
+function setConn(){
+ const m={wait:['공유 저장소에 연결 중…',0],ok:['공유 저장소 연결됨 · 모든 기기에서 같은 기록',0],slow:['저장소 응답이 늦어요. 화면이 최신이 아닐 수 있어요',1],err:['저장소 연결이 끊겼어요. 페이지를 다시 열어 주세요',1],local:['이 기기에만 저장 중',0]}[conn]||['',0];
+ const el=$('#conn');el.textContent=m[0];el.classList.toggle('bad',!!m[1]);
+}
+function loaded(ok){if(ok&&(conn==='wait'||conn==='slow')){conn='ok';if(ldT){clearTimeout(ldT);ldT=null}setConn()}}
+function fail(){if(ldT){clearTimeout(ldT);ldT=null}conn='err';setConn()}
+
+function subCur(){
+ if(unCur)unCur();A.curYM=ymOf(today());
+ unCur=S.sessions(A.curYM,(l,ok)=>{A.cur=l;loaded(ok);render()},fail);
+}
+function subMon(ym){
+ if(A.mon.ym===ym&&(unMon||ym===A.curYM))return;
+ if(unMon){unMon();unMon=null}
+ A.mon={ym,list:[]};
+ if(ym!==A.curYM)unMon=S.sessions(ym,l=>{A.mon.list=l;render()},fail);
+}
+const monList=()=>A.mon.ym===A.curYM?A.cur:A.mon.list;
+const active=()=>A.cur.filter(s=>s.end==null);
+const activeOf=id=>A.cur.find(s=>s.sid===id&&s.end==null);
+const findSess=id=>monList().find(x=>x.id===id)||A.cur.find(x=>x.id===id);
+
+/* ---------- 수행평가 (항상 표시) ---------- */
+function renderNotice(){
+ const n=A.notice,t=today(),meta=$('#nmeta');let body;
+ if(!A.ready){return}
+ if(!n){meta.textContent='업데이트 전';meta.className='stale';body='<li class="none">아직 등록된 수행평가가 없어요. 선생님이 곧 올려 주실 거예요.</li>'}
+ else{
+  const stale=n.date!==t,items=Array.isArray(n.items)?n.items:[];
+  meta.textContent=stale?'지난 업데이트 · '+md(n.date):'오늘 '+hm(n.updatedAt)+' 업데이트';
+  meta.className=stale?'stale':'';
+  body=items.length?items.map(x=>`<li><b>${esc(x.sub)||'공지'}</b><span>${esc(x.txt)}</span></li>`).join('')
+   :`<li class="none">${stale?'등록된 항목이 없어요':'오늘은 수행평가가 없어요'}</li>`;
+  $('#ntitle').textContent='오늘의 수행평가'+(items.length?' · '+items.length+'건':'');
+ }
+ $('#nlist').innerHTML=body;
+}
+
+/* ---------- 출석 화면 ---------- */
+function renderAtt(){
+ const g=$('#grid');
+ if(!A.ready){g.innerHTML='<p class="empty">불러오는 중…</p>';return}
+ const t=today(),now=Date.now(),act=new Map(),done=new Map(),seen=new Set();
+ A.cur.forEach(s=>{if(s.end==null)act.set(s.sid,s);else if(s.date===t)done.set(s.sid,(done.get(s.sid)||0)+dur(s,now));if(s.date===t)seen.add(s.sid)});
+ $('#attStats').innerHTML=`<span class="live"><b>${act.size}</b>자습 중</span><span><b>${seen.size}</b>오늘 출석</span><span><b>${A.students.length}</b>전체</span>`;
+ if(!A.students.length){g.innerHTML='<p class="empty">아직 등록된 학생이 없어요. 관리자 링크 → 학생 명단에서 추가해 주세요.</p>';return}
+ const q=A.q.trim();
+ const list=[...A.students].sort(cmpNo).filter(s=>!q||(String(s.name)+String(s.no||'')).includes(q));
+ g.innerHTML=list.map(s=>{const a=act.get(s.id),d=done.get(s.id);
+  return `<button class="tile${a?' on':d!=null?' done':''}" data-tile="${esc(s.id)}"><small>${esc(s.no)}</small><b>${esc(s.name)}</b><span class="st"${a?` data-st="${a.start}"`:''}>${a?hms(now-a.start):d!=null?'완료 · '+kdur(d):'출석 전'}</span></button>`}).join('')
+  ||'<p class="empty">찾는 학생이 없어요</p>';
+}
+function openSheet(id){
+ const st=A.students.find(x=>x.id===id);if(!st)return;
+ if(activeOf(id)){toast(st.name+' 학생은 이미 자습 중이에요');return}
+ sheetSt=st;$('#shNo').textContent=st.no||'';$('#shName').textContent=st.name;$('#sheet').hidden=false;$('#shOk').focus();
+}
+function closeSheet(){$('#sheet').hidden=true;sheetSt=null}
+async function checkIn(st){
+ if(!st||A.busy||activeOf(st.id))return;A.busy=true;
+ const now=Date.now(),t=today();
+ const ok=await w(()=>S.setSession(ymOf(t),uid(),{sid:st.id,name:st.name,no:st.no||'',date:t,start:now,end:null}));
+ A.busy=false;if(ok)toast(st.name+' 출석 완료 · '+hm(now)+' 시작');
+}
+function endSess(s){
+ const now=Date.now(),end=s.date!==today()?Math.min(now,s.start+STALE_CAP):now;
+ const {id,...d}=s;return w(()=>S.setSession(ymOf(s.date),id,{...d,end}));
+}
+
+/* ---------- 월간 기록 ---------- */
+function monRows(){
+ const now=Date.now(),map=new Map();
+ A.students.forEach(s=>map.set(s.id,{id:s.id,no:s.no||'',name:s.name||'',days:new Set(),ms:0,by:{}}));
+ monList().forEach(x=>{let r=map.get(x.sid);
+  if(!r){r={id:x.sid,no:x.no||'',name:x.name||'',gone:true,days:new Set(),ms:0,by:{}};map.set(x.sid,r)}
+  const d=dur(x,now);r.days.add(x.date);r.ms+=d;r.by[x.date]=(r.by[x.date]||0)+d});
+ const rows=[...map.values()].sort((a,b)=>b.ms-a.ms||b.days.size-a.days.size||cmpNo(a,b));
+ let rk=0,prev=-1;rows.forEach((r,i)=>{if(r.ms!==prev){rk=i+1;prev=r.ms}r.rk=r.ms>0?rk:null});
+ return rows;
+}
+function cal(r){
+ const [y,m]=A.monYM.split('-').map(Number),first=new Date(y,m-1,1).getDay(),n=new Date(y,m,0).getDate(),t=today();
+ let h=[...DOW].map(d=>`<span>${d}</span>`).join('');
+ for(let i=0;i<first;i++)h+='<div class="x"></div>';
+ for(let d=1;d<=n;d++){const k=A.monYM+'-'+pad(d),ms=r.by[k]||0,mn=Math.round(ms/60000);
+  const st=ms?` style="background:rgba(228,0,43,${(.28+.72*Math.min(1,mn/120)).toFixed(2)});color:#fff"`:'';
+  h+=`<div class="${k===t?'t':''}"${st}>${d}${ms?`<em>${mn}분</em>`:''}</div>`}
+ return `<div class="cal">${h}</div><p class="hint" style="margin-top:4px">${esc(r.name)} · ${r.days.size}일 출석, 총 ${kdur(r.ms)}</p>`;
+}
+function renderMon(){
+ const [y,m]=A.monYM.split('-').map(Number);
+ $('#mLabel').textContent=y+'년 '+m+'월';$('#mNext').disabled=A.monYM>=A.curYM;$('#csv').hidden=!A.admin;
+ if(A.config.hideMon&&!A.admin){$('#monSum').innerHTML='';$('#monBody').innerHTML='<p class="empty">선생님이 월간 기록을 비공개로 해 두었어요.</p>';return}
+ const rows=monRows(),list=monList();
+ const op=new Set(list.map(x=>x.date)).size,visits=rows.reduce((a,r)=>a+r.days.size,0),tot=rows.reduce((a,r)=>a+r.ms,0);
+ $('#monSum').innerHTML=[['운영일',op+'일'],['출석 연인원',visits+'명'],['총 공부시간',kdur(tot)],['하루 평균 인원',op?(visits/op).toFixed(1)+'명':'–']]
+  .map(([k,v])=>`<div><small>${k}</small><b>${v}</b></div>`).join('');
+ if(!rows.length){$('#monBody').innerHTML='<p class="empty">이 달의 기록이 없어요.</p>';return}
+ const q=A.monQ.trim(),shown=q?rows.filter(r=>(r.name+r.no).includes(q)):rows,max=Math.max(1,...rows.map(r=>r.ms));
+ $('#monBody').innerHTML=`<table><thead><tr><th>순위</th><th class="hs">학번</th><th>이름</th><th class="r">출석일수</th><th>공부시간</th><th class="r hs">하루 평균</th></tr></thead><tbody>${
+  shown.map(r=>{const o=A.open===r.id;
+   return `<tr class="rw${r.rk&&r.rk<=3?' top3':''}" data-open="${esc(r.id)}" aria-expanded="${o}"><td class="rk">${r.rk??'–'}</td><td class="hs num">${esc(r.no)}</td><td><b>${esc(r.name)}</b>${r.gone?'<span class="gone">명단 삭제됨</span>':''}</td><td class="r num">${r.days.size}일</td><td><span class="num">${kdur(r.ms)}</span><div class="bar"><i style="width:${(r.ms/max*100).toFixed(1)}%"></i></div></td><td class="r hs num">${r.days.size?kdur(r.ms/r.days.size):'–'}</td></tr>${o?`<tr><td colspan="6">${cal(r)}</td></tr>`:''}`}).join('')
+  ||'<tr><td colspan="6" class="empty">찾는 학생이 없어요</td></tr>'}</tbody></table>`;
+}
+
+/* ---------- 관리자 ---------- */
+function showAdm(){
+ $('#admLock').hidden=A.admin;$('#admIn').hidden=!A.admin;
+ $('#pinHint').hidden=!!A.config.pinHash;
+ if(A.admin)buildAdm();
+ if(A.view==='mon')renderMon();
+}
+function tryPin(){
+ const p=$('#pin'),v=p.value;
+ if(!S||(S.kind==='db'&&!A.cfgLoaded)){toast('설정을 불러오는 중이에요. 잠시 후 다시 눌러 주세요',true);return}
+ if(hash(v)===(A.config.pinHash||hash('0000'))){A.admin=true;A.lastAct=Date.now();p.value='';showAdm()}
+ else{p.value='';toast('PIN이 맞지 않아요',true)}
+}
+function buildAdm(){
+ document.querySelectorAll('#admChips button').forEach(b=>b.classList.toggle('on',b.dataset.t===A.admTab));
+ const B=$('#admBody'),t=A.admTab;A.ed=null;A.arm=null;A.endArm=false;
+ if(t==='now')B.innerHTML='<div id="nowLive"></div>';
+ else if(t==='notice'){
+  const src=A.notice&&Array.isArray(A.notice.items)?A.notice.items:[];
+  A.nd=src.map(x=>({sub:x.sub||'',txt:x.txt||''}));if(!A.nd.length)A.nd.push({sub:'',txt:''});
+  B.innerHTML=`<p class="hint" style="margin-top:0">여기서 저장한 내용이 모든 화면에 항상 떠 있어요 (넓은 화면은 왼쪽, 휴대폰은 위쪽). 날짜가 지나면 “지난 업데이트”로 표시돼요.</p>
+   <div id="ndRows"></div>
+   <div class="row"><button class="btn ghost" id="ndAdd">+ 항목 추가</button></div>
+   <div class="row"><button class="btn red" id="ndSave">오늘 날짜로 저장</button><button class="btn ghost" id="ndNone">오늘은 수행평가 없음</button></div>`;
+  renderNdRows();
+ }
+ else if(t==='roster'){
+  B.innerHTML=`<form id="addSt" class="addst"><input id="stNo" class="in" placeholder="학번 (예: 10213)" inputmode="numeric" maxlength="10" autocomplete="off"><input id="stName" class="in" placeholder="이름" maxlength="20" autocomplete="off"><button class="btn red">추가</button></form>
+   <details class="bulk"><summary>여러 명 한 번에 추가</summary><textarea id="bulk" class="in" placeholder="한 줄에 한 명씩 '학번 이름'&#10;10101 김민준&#10;10102 이서연"></textarea><button class="btn" id="bulkAdd" type="button">모두 추가</button></details>
+   <div id="rosterList"></div>`;
+ }
+ else if(t==='rec'){
+  subMon(ymOf(A.recDate));
+  const opts=[...A.students].sort(cmpNo).map(s=>`<option value="${esc(s.id)}">${esc(s.no)} ${esc(s.name)}</option>`).join('');
+  B.innerHTML=`<div class="row" style="margin-top:0"><label class="fld">날짜<input type="date" id="recDate" value="${A.recDate}" max="${today()}"></label></div>
+   <div id="recList"></div>
+   <details class="bulk"><summary>빠진 기록 직접 추가 (위 날짜에)</summary><div class="row"><select id="arSt" aria-label="학생">${opts||'<option value="">학생 없음</option>'}</select><input type="time" id="arS" value="07:30" aria-label="시작"><input type="time" id="arE" value="08:30" aria-label="종료"><button class="btn" id="arAdd">추가</button></div></details>`;
+ }
+ else{
+  B.innerHTML=`<div class="card"><h3>관리자 PIN 바꾸기</h3><p>숫자 4~8자리. ${A.config.pinHash?'':'지금은 기본값 0000이에요.'}</p>
+    <div class="row"><input id="np1" class="in" type="password" inputmode="numeric" maxlength="8" placeholder="새 PIN" autocomplete="new-password"><input id="np2" class="in" type="password" inputmode="numeric" maxlength="8" placeholder="한 번 더" autocomplete="new-password"><button class="btn red" id="pinSave">변경</button></div></div>
+   <div class="card"><h3>학생 화면</h3><label class="tog"><input type="checkbox" id="showMon" ${A.config.hideMon?'':'checked'}> 학생도 월간 기록을 볼 수 있게 하기</label></div>
+   <div class="card"><h3>저장 방식</h3><p>${S&&S.kind==='db'?'공유 저장소(Firebase)를 쓰고 있어요. 이 링크를 연 기기(교실 태블릿, 선생님 휴대폰 등)가 모두 같은 명단과 기록을 봐요.':'지금은 이 기기의 브라우저에만 저장돼요. 교실 기기 한 대로 출석과 관리를 함께 하면 문제없어요. 브라우저 기록을 지우면 데이터도 지워지니, 가끔 아래에서 백업해 두세요.'}</p></div>
+   ${S&&S.kind==='local'?`<div class="card"><h3>백업과 복원</h3><p>백업 내용을 복사해 메모장 등에 저장해 두고, 필요할 때 붙여넣어 되살릴 수 있어요.</p>
+    <div class="row"><button class="btn" id="bkCopy">백업 복사</button><button class="btn ghost" id="bkLoad">붙여넣은 백업으로 복원</button></div>
+    <textarea id="bkText" class="in" placeholder="복원할 백업 내용을 여기에 붙여넣으세요"></textarea></div>`:''}
+   <div class="card"><h3>자동 잠금</h3><p>5분 동안 아무 조작이 없으면 관리자 화면이 저절로 잠겨요. 교실 기기에서 열어 둔 채 자리를 비워도 안전해요.</p></div>`;
+ }
+ renderAdmLive();
+}
+function renderNdRows(){
+ $('#ndRows').innerHTML=A.nd.map((x,i)=>`<div class="ndrow"><input class="in" data-ni="${i}" data-nf="sub" value="${esc(x.sub)}" placeholder="과목 (예: 국어)" maxlength="20" aria-label="과목"><input class="in" data-ni="${i}" data-nf="txt" value="${esc(x.txt)}" placeholder="내용 (예: 3교시 독서 감상문 제출)" maxlength="120" aria-label="내용"><button class="x" data-ndel="${i}" aria-label="항목 삭제">×</button></div>`).join('');
+}
+function admNow(){
+ const act=active().sort((a,b)=>a.start-b.start),t=today(),now=Date.now();
+ const done=A.cur.filter(s=>s.date===t&&s.end!=null).sort((a,b)=>b.end-a.end);
+ const warn=(!A.notice||A.notice.date!==t)?'<div class="warn"><span>오늘의 수행평가가 아직 업데이트되지 않았어요.</span><button class="btn sm red" data-go="notice">지금 입력</button></div>':'';
+ return warn+`<div class="nowhead"><div class="big"><b>${act.length}</b><span>명 자습 중</span></div>
+  <button class="btn red" id="endAll" ${act.length?'':'disabled'}>${A.endArm?'한 번 더 누르면 '+act.length+'명 종료':'전체 종료'}</button></div>
+  <ul class="list">${act.map(s=>`<li><div><b>${esc(s.name)}</b><small>${esc(s.no)} · ${hm(s.start)} 시작${s.date!==t?' · <em>'+md(s.date)+' 미종료 (최대 3시간으로 기록)</em>':''}</small></div><span class="tm" data-st="${s.start}">${hms(now-s.start)}</span><button class="btn sm" data-end="${esc(s.id)}">종료</button></li>`).join('')||'<li class="empty">지금 자습 중인 학생이 없어요</li>'}</ul>
+  <h3>오늘 마친 학생 ${done.length}명</h3>
+  <ul class="list">${done.map(s=>`<li><div><b>${esc(s.name)}</b><small>${esc(s.no)}</small></div><span class="num">${hm(s.start)} – ${hm(s.end)}</span><span class="num" style="color:var(--mut)">${kdur(dur(s,now))}</span></li>`).join('')||'<li class="empty">아직 없어요</li>'}</ul>`;
+}
+function renderRoster(){
+ const el=$('#rosterList');if(!el)return;
+ const days={};A.cur.forEach(s=>{(days[s.sid]=days[s.sid]||new Set()).add(s.date)});
+ const list=[...A.students].sort(cmpNo);
+ el.innerHTML=`<h3>등록된 학생 ${list.length}명</h3><ul class="list">${list.map(s=>`<li><span class="num no">${esc(s.no)}</span><div><b>${esc(s.name)}</b><small>이번 달 ${days[s.id]?days[s.id].size:0}일 출석</small></div><button class="btn sm ghost" data-delst="${esc(s.id)}">${A.arm===s.id?'한 번 더 누르면 삭제':'삭제'}</button></li>`).join('')||'<li class="empty">아직 학생이 없어요</li>'}</ul>
+  <p class="hint">학생을 지워도 지난 출석 기록은 월간 기록에 남아요.</p>`;
+}
+function renderRec(){
+ const el=$('#recList');if(!el)return;
+ const now=Date.now(),list=monList().filter(s=>s.date===A.recDate).sort((a,b)=>a.start-b.start);
+ el.innerHTML=`<p class="hint">${md(A.recDate)} · 기록 ${list.length}건 · 총 ${kdur(list.reduce((a,s)=>a+dur(s,now),0))}</p><ul class="list">${list.map(s=>{const e=A.ed&&A.ed.id===s.id;
+  return `<li><div><b>${esc(s.name)}</b><small>${esc(s.no)}</small></div>${e
+   ?`<input type="time" data-ef="st" value="${esc(A.ed.st)}" aria-label="시작"><input type="time" data-ef="en" value="${esc(A.ed.en)}" aria-label="종료 (비우면 진행 중)"><button class="btn sm red" data-rsave="${esc(s.id)}">저장</button><button class="btn sm ghost" data-rcancel="1">취소</button>`
+   :`<span class="num">${hm(s.start)} – ${s.end!=null?hm(s.end):'진행 중'}</span><span class="num hs" style="color:var(--mut)">${kdur(dur(s,now))}</span><button class="btn sm ghost" data-redit="${esc(s.id)}">수정</button><button class="btn sm ghost" data-rdel="${esc(s.id)}">${A.arm==='r'+s.id?'정말 삭제':'삭제'}</button>`}</li>`}).join('')||'<li class="empty">이 날의 기록이 없어요</li>'}</ul>`;
+}
+function renderAdmLive(){
+ const t=A.admTab;
+ if(t==='now'){const el=$('#nowLive');if(el)el.innerHTML=admNow()}
+ else if(t==='roster')renderRoster();
+ else if(t==='rec'&&!A.ed)renderRec();
+}
+
+/* ---------- 화면 전환 / 렌더 ---------- */
+function go(v){
+ A.view=v;['att','mon','adm'].forEach(k=>{const el=$('#v-'+k);if(el)el.hidden=k!==v});
+ document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
+ if(S&&v==='mon')subMon(A.monYM);
+ if(v==='adm')showAdm();
+ render();
+}
+function render(){
+ renderNotice();
+ if(A.view==='att')renderAtt();
+ else if(A.view==='mon')renderMon();
+ else if(A.admin)renderAdmLive();
+}
+function armReset(key,fn){A.arm=key;fn();setTimeout(()=>{if(A.arm===key){A.arm=null;fn()}},3500)}
+
+/* ---------- 이벤트 ---------- */
+document.addEventListener('pointerdown',()=>{A.lastAct=Date.now()});
+document.addEventListener('keydown',e=>{A.lastAct=Date.now();if(e.key==='Escape'&&!$('#sheet').hidden)closeSheet()});
+document.addEventListener('click',e=>{
+ if(e.target.id==='sheet'){closeSheet();return}
+ const t=e.target.closest('button,[data-open]');if(!t)return;
+ const d=t.dataset;
+ if(d.v){go(d.v);return}
+ if(d.t||d.go){A.admTab=d.t||d.go;buildAdm();return}
+ if(d.tile){if(S)openSheet(d.tile);return}
+ if(d.k){const p=$('#pin');if(d.k==='del')p.value=p.value.slice(0,-1);else if(d.k==='ok')tryPin();else if(p.value.length<8)p.value+=d.k;return}
+ if(d.open){A.open=A.open===d.open?null:d.open;renderMon();return}
+ if(d.end){const s=A.cur.find(x=>x.id===d.end);if(s)endSess(s).then(ok=>{if(ok)toast(s.name+' 자습 종료')});return}
+ if('ndel' in d){A.nd.splice(+d.ndel,1);if(!A.nd.length)A.nd.push({sub:'',txt:''});renderNdRows();return}
+ if(d.delst){
+  if(A.arm!==d.delst){armReset(d.delst,renderRoster);return}
+  A.arm=null;const st=A.students.find(x=>x.id===d.delst);w(()=>S.delStudent(d.delst),(st?st.name:'학생')+' 명단에서 삭제');return}
+ if(d.redit){const s=findSess(d.redit);if(s){A.ed={id:s.id,st:hm(s.start),en:s.end!=null?hm(s.end):''};renderRec()}return}
+ if(d.rcancel){A.ed=null;renderRec();return}
+ if(d.rsave){
+  const s=findSess(d.rsave);if(!s||!A.ed)return;
+  const st=toMs(s.date,A.ed.st),en=A.ed.en?toMs(s.date,A.ed.en):null;
+  if(!st){toast('시작 시각을 입력해 주세요',true);return}
+  if(en!=null&&en<=st){toast('종료가 시작보다 늦어야 해요',true);return}
+  const {id,...rest}=s;
+  w(()=>S.setSession(ymOf(s.date),id,{...rest,start:st,end:en}),'기록을 고쳤어요').then(ok=>{if(ok){A.ed=null;renderRec()}});return}
+ if(d.rdel){
+  const key='r'+d.rdel;if(A.arm!==key){armReset(key,renderRec);return}
+  A.arm=null;const s=findSess(d.rdel);if(s)w(()=>S.delSession(ymOf(s.date),s.id),'기록을 삭제했어요');return}
+ switch(t.id){
+  case 'shOk':{const st=sheetSt;closeSheet();checkIn(st);break}
+  case 'shCancel':closeSheet();break;
+  case 'nToggle':{const n=$('#notice'),f=n.classList.toggle('fold');t.setAttribute('aria-expanded',String(!f));break}
+  case 'mPrev':A.monYM=addM(A.monYM,-1);A.open=null;if(S)subMon(A.monYM);renderMon();break;
+  case 'mNext':if(A.monYM<A.curYM){A.monYM=addM(A.monYM,1);A.open=null;if(S)subMon(A.monYM);renderMon()}break;
+  case 'csv':{
+   const rows=monRows(),txt=['순위\t학번\t이름\t출석일수\t공부시간(분)\t하루 평균(분)'].concat(rows.map(r=>[r.rk??'',r.no,r.name,r.days.size,Math.round(r.ms/60000),r.days.size?Math.round(r.ms/60000/r.days.size):0].join('\t'))).join('\n');
+   const out=$('#csvOut');
+   const fb=()=>{out.value=txt;out.hidden=false;out.focus();out.select();toast('복사가 막혀 있어요. 아래 칸을 길게 눌러 복사해 주세요',true)};
+   try{navigator.clipboard.writeText(txt).then(()=>{out.hidden=true;toast('복사했어요. 엑셀에 붙여넣기 하세요')},fb)}catch(x){fb()}
+   break}
+  case 'lockBtn':A.admin=false;showAdm();toast('관리자 화면을 잠갔어요');break;
+  case 'endAll':{
+   const act=active();if(!act.length)break;
+   if(!A.endArm){A.endArm=true;renderAdmLive();setTimeout(()=>{if(A.endArm){A.endArm=false;if(A.admin&&A.admTab==='now')renderAdmLive()}},3500);break}
+   A.endArm=false;
+   (async()=>{let n=0;for(const s of act){if(await endSess(s))n++;else break}if(n)toast(n+'명 자습 종료')})();
+   break}
+  case 'ndAdd':A.nd.push({sub:'',txt:''});renderNdRows();{const ins=document.querySelectorAll('#ndRows [data-nf="sub"]');ins[ins.length-1].focus()}break;
+  case 'ndSave':{
+   const items=A.nd.map(x=>({sub:x.sub.trim(),txt:x.txt.trim()})).filter(x=>x.sub||x.txt);
+   w(()=>S.setMeta('notice',{items,date:today(),updatedAt:Date.now()}),items.length?'수행평가를 업데이트했어요':'오늘은 수행평가 없음으로 저장했어요');break}
+  case 'ndNone':A.nd=[{sub:'',txt:''}];renderNdRows();w(()=>S.setMeta('notice',{items:[],date:today(),updatedAt:Date.now()}),'오늘은 수행평가 없음으로 저장했어요');break;
+  case 'bulkAdd':{
+   const lines=$('#bulk').value.split('\n').map(x=>x.trim()).filter(Boolean);if(!lines.length)break;
+   const have=new Set(A.students.map(s=>(s.no||'')+'|'+s.name));
+   (async()=>{let n=0;for(const ln of lines){
+     const m=ln.match(/^(\d+)[\s,]+(.+)$/),no=m?m[1]:'',name=(m?m[2]:ln).trim().slice(0,20),key=no+'|'+name;
+     if(!name||have.has(key))continue;have.add(key);
+     if(await w(()=>S.setStudent(uid(),{no,name,created:Date.now()})))n++;else break}
+    toast(n?n+'명 추가했어요':'새로 추가할 학생이 없어요');if(n)$('#bulk').value=''})();
+   break}
+  case 'arAdd':{
+   const sid=$('#arSt').value,st=A.students.find(x=>x.id===sid);if(!st){toast('학생을 골라 주세요',true);break}
+   const s=toMs(A.recDate,$('#arS').value),en=toMs(A.recDate,$('#arE').value);
+   if(!s||!en||en<=s){toast('시작과 종료 시각을 확인해 주세요',true);break}
+   w(()=>S.setSession(ymOf(A.recDate),uid(),{sid,name:st.name,no:st.no||'',date:A.recDate,start:s,end:en}),st.name+' 기록 추가');break}
+  case 'bkCopy':{
+   const txt=S.dump(),ta=$('#bkText');
+   const fb=()=>{ta.value=txt;ta.focus();ta.select();toast('아래 칸의 내용을 전부 복사해 저장해 두세요')};
+   try{navigator.clipboard.writeText(txt).then(()=>toast('백업을 복사했어요. 메모장 등에 붙여넣어 저장하세요'),fb)}catch(x){fb()}
+   break}
+  case 'bkLoad':{
+   if(A.arm!=='bk'){A.arm='bk';t.textContent='한 번 더 누르면 지금 데이터를 덮어써요';setTimeout(()=>{if(A.arm==='bk'){A.arm=null;t.textContent='붙여넣은 백업으로 복원'}},4000);break}
+   A.arm=null;t.textContent='붙여넣은 백업으로 복원';
+   try{S.load(JSON.parse($('#bkText').value));toast('백업으로 복원했어요')}catch(x){toast('백업 내용이 올바르지 않아요',true)}
+   break}
+  case 'pinSave':{
+   const a=$('#np1').value,b=$('#np2').value;
+   if(!/^\d{4,8}$/.test(a)){toast('PIN은 숫자 4~8자리예요',true);break}
+   if(a!==b){toast('두 PIN이 서로 달라요',true);break}
+   w(()=>S.setMeta('config',{...A.config,pinHash:hash(a)}),'PIN을 바꿨어요').then(ok=>{if(ok){$('#np1').value='';$('#np2').value=''}});break}
+ }
+});
+document.addEventListener('submit',e=>{
+ e.preventDefault();
+ if(e.target.id==='pinForm'){tryPin();return}
+ if(e.target.id==='addSt'){
+  const no=$('#stNo').value.trim(),name=$('#stName').value.trim();
+  if(!name){toast('이름을 입력해 주세요',true);$('#stName').focus();return}
+  if(A.students.some(s=>(s.no||'')===no&&s.name===name)){toast('이미 있는 학생이에요',true);return}
+  w(()=>S.setStudent(uid(),{no,name,created:Date.now()}),name+' 추가').then(ok=>{if(ok){$('#stName').value='';$('#stNo').value='';$('#stNo').focus()}});
+ }
+});
+document.addEventListener('input',e=>{
+ const t=e.target,d=t.dataset;
+ if(t.id==='q'){A.q=t.value;renderAtt()}
+ else if(t.id==='mq'){A.monQ=t.value;renderMon()}
+ else if('ni' in d){const r=A.nd[+d.ni];if(r)r[d.nf]=t.value}
+ else if(d.ef&&A.ed){A.ed[d.ef]=t.value}
+});
+document.addEventListener('change',e=>{
+ const t=e.target;
+ if(t.id==='recDate'&&t.value){A.recDate=t.value>today()?today():t.value;A.ed=null;subMon(ymOf(A.recDate));renderRec()}
+ if(t.id==='showMon')w(()=>S.setMeta('config',{...A.config,hideMon:!t.checked}),t.checked?'학생에게 월간 기록을 보여줘요':'월간 기록을 비공개로 바꿨어요');
+});
+
+/* ---------- 시계 ---------- */
+let lastMin=-1,lastDay=today();
+function tick(){
+ const n=new Date(),now=n.getTime();
+ $('#clk').innerHTML=pad(n.getHours())+':'+pad(n.getMinutes())+'<small>'+pad(n.getSeconds())+'</small>';
+ $('#dt').textContent=(n.getMonth()+1)+'월 '+n.getDate()+'일 '+DOW[n.getDay()]+'요일';
+ document.querySelectorAll('[data-st]').forEach(el=>{el.textContent=hms(now-(+el.dataset.st))});
+ if(A.admin&&now-A.lastAct>IDLE){A.admin=false;showAdm();toast('5분 동안 조작이 없어 관리자 화면을 잠갔어요')}
+ if(S&&ymOf(today())!==A.curYM)subCur();
+ if(today()!==lastDay){lastDay=today();A.recDate=lastDay}
+ if(A.ready&&n.getMinutes()!==lastMin){lastMin=n.getMinutes();render()}
+}
+
+/* ---------- 시작 ---------- */
+async function init(){
+ let fsS=null;
+ if(FIREBASE_CONFIG&&FIREBASE_CONFIG.apiKey){try{fsS=await fsStore(FIREBASE_CONFIG)}catch(e){console.error(e)}}
+ S=fsS||localStore();
+ conn=fsS?'wait':'local';setConn();
+ if(fsS)ldT=setTimeout(()=>{if(conn==='wait'){conn='slow';setConn()}},10000);
+ A.ready=true;
+ S.students((l,ok)=>{A.students=l;loaded(ok);render()},fail);
+ S.meta('notice',(d,ok)=>{A.notice=d;loaded(ok);render()},fail);
+ S.meta('config',d=>{A.config=d||{};A.cfgLoaded=true;if(A.view==='adm'&&!A.admin)showAdm();render()},fail);
+ subCur();
+ if(A.view==='mon')subMon(A.monYM);
+ if(A.view==='adm')showAdm();
+ render();
+}
+if(!ADMIN){$('.tabs [data-v="adm"]').remove();$('#v-adm').remove()}
+setInterval(tick,1000);tick();renderAtt();
+if(ADMIN){document.title='관리자 · 아침 자습 출석부';go('adm')}
+init();
+}
+</script>
+</body>
+</html>
